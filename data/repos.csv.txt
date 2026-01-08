@@ -1,3 +1,0 @@
-repo_url
-https://github.com/git/git.git
-https://github.com/curl/curl.git
