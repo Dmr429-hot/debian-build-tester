@@ -34,12 +34,14 @@ def main():
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     repo_urls = read_repo_urls(csv_path)
+    print(f"Found {len(repo_urls)} repositories to process.")  # 输出找到的仓库数
 
     with out_path.open("a", encoding="utf-8") as f:
         # 初始化序号
         index = 1
 
         for url in repo_urls:
+            print(f"Processing repository: {url}")  # 输出当前正在处理的仓库
             # 提取仓库名
             repo_name = get_repo_name(url)
 
