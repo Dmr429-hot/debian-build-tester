@@ -83,7 +83,7 @@ def main():
             index += 1
 
     print(f"Done. Results: {out_path}")
-    
-    if __name__ == "__main__":
-        main()
+
+if __name__ == "__main__":
+    main()
 
