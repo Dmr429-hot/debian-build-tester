@@ -28,7 +28,7 @@ def get_repo_name(url: str) -> str:
 
 def main():
     args = parse_args()
-    print("已执行完parse_args()")
+    print(f"命令行参数：{args}")
     csv_path = Path(args.csv)
     workspace_dir = Path(args.workspace)
     out_path = Path(args.out)

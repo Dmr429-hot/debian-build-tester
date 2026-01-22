@@ -26,9 +26,9 @@ def build_project(repo_dir: Path, build_type: str, timeout_s: int = 300) -> Tupl
     """
     执行构建命令，返回构建状态、日志和失败阶段
     :param repo_dir: 仓库路径
-    :param build_type: 构建类型（CMake / Meson 等）
+    :param build_type: 构建类型(CMake / Meson 等)
     :param timeout_s: 超时设置
-    :return: 构建状态（成功/失败）、构建日志、失败阶段
+    :return: 构建状态(成功/失败)、构建日志、失败阶段
     """
     build_status, build_log = "FAIL", ""
     failure_stage = "UNKNOWN"  # 默认值，未确定失败阶段
