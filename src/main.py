@@ -27,6 +27,9 @@ def get_repo_name(url: str) -> str:
     return url.rstrip('/').split('/')[-1].replace('.git', '')
 
 def main():
+    import sys
+    print(f"命令行参数：{sys.argv}")
+
     args = parse_args()
     print(f"命令行参数：{args}")
     csv_path = Path(args.csv)
