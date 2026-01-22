@@ -27,9 +27,6 @@ def get_repo_name(url: str) -> str:
     return url.rstrip('/').split('/')[-1].replace('.git', '')
 
 def main():
-    import sys
-    print(f"命令行参数：{sys.argv}")
-
     args = parse_args()
     print(f"命令行参数：{args}")
     csv_path = Path(args.csv)
@@ -86,4 +83,7 @@ def main():
             index += 1
 
     print(f"Done. Results: {out_path}")
+    
+    if __name__ == "__main__":
+        main()
 
