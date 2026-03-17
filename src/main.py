@@ -60,6 +60,7 @@ def main():
                 "build_type": "OTHER",
                 "build_status": "PENDING",  # 初始状态
                 "build_log": "",
+                "failure_reason": "未运行",  # 新增：失败原因
                 "failure_stage": "NONE",  # 新增：记录失败阶段
                 "evidence": [],
             }
@@ -70,9 +71,10 @@ def main():
                 record["build_type"] = build_type
                 record["evidence"] = evidence
 
-                build_status, build_log, failure_stage = build_project(repo_path, build_type, timeout_s=args.clone_timeout)
+                build_status, build_log, failure_reason, failure_stage = build_project(repo_path, build_type, timeout_s=args.clone_timeout)
                 record["build_status"] = build_status
-                record["build_log"] = build_log[:2000]
+                record["build_log"] = build_log
+                record["failure_reason"] = failure_reason  # 新增：记录失败原因
                 record["failure_stage"] = failure_stage  # 新增：记录失败的阶段
 
             # 将序号和仓库信息写入文件
