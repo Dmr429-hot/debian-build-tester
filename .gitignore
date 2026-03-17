@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.Python
+*.so
+*.egg
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDE
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+
+# 项目运行结果 - 绝对不追踪
+workspace/              # 临时克隆的仓库
+results/                # 生成的 JSONL 和 CSV 文件
+*.jsonl
+*.csv
+
+# 系统文件
+.DS_Store
+Thumbs.db
