@@ -8,6 +8,7 @@ from io_csv import read_repo_urls
 from git_ops import controlled_clone
 from detect import detect_build_type
 from build import build_project
+from output_generator import generate_output_files
 
 
 def parse_args():
@@ -85,6 +86,20 @@ def main():
             index += 1
 
     print(f"Done. Results: {out_path}")
+    
+    # 生成最终输出 CSV 文件
+    print("\n" + "="*80)
+    print("生成最终输出文件...")
+    print("="*80)
+    
+    success_csv_path = out_path.parent / "success.csv"
+    failure_csv_path = out_path.parent / "failure.csv"
+    
+    output_stats = generate_output_files(out_path, success_csv_path, failure_csv_path)
+    
+    print(f"\n✅ success.csv 已生成: {success_csv_path}")
+    print(f"❌ failure.csv 已生成: {failure_csv_path}")
+    print(f"\n统计: 成功 {output_stats['success_count']} | 失败 {output_stats['failure_count']}")
 
 if __name__ == "__main__":
     main()

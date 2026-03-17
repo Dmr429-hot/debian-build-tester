@@ -6,7 +6,7 @@ from typing import List, Tuple
 def detect_build_type(repo_dir: Path) -> Tuple[str, List[str]]:
     """
     Returns: (build_type, evidence_files)
-    build_type in: MESON, CMAKE, AUTOTOOLS, PYTHON, PERL, QMAKE, MAKEFILE, OTHER
+    build_type in: MESON, JAVA, CMAKE, AUTOTOOLS, PERL, PYTHON, QMAKE, MAKEFILE, OTHER
     """
     evidence: List[str] = []
 
@@ -53,13 +53,26 @@ def detect_build_type(repo_dir: Path) -> Tuple[str, List[str]]:
         evidence.append("Makefile.PL")
         return "PERL", evidence
 
-    # 6) QMake
+    # 6) Java (Maven, Gradle, Ant)
+    if exists("pom.xml"):
+        evidence.append("pom.xml")
+        return "JAVA", evidence
+    if exists("build.gradle") or exists("build.gradle.kts"):
+        for f in ["build.gradle", "build.gradle.kts"]:
+            if exists(f):
+                evidence.append(f)
+        return "JAVA", evidence
+    if exists("build.xml"):
+        evidence.append("build.xml")
+        return "JAVA", evidence
+
+    # 7) QMake
     pro_files = list(repo_dir.glob("*.pro"))
     if pro_files:
         evidence.append(pro_files[0].name)
         return "QMAKE", evidence
 
-    # 7) Makefile only
+    # 8) Makefile only
     if exists("Makefile"):
         evidence.append("Makefile")
         return "MAKEFILE", evidence

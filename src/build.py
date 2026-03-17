@@ -41,6 +41,10 @@ def build_project(repo_dir: Path, build_type: str, timeout_s: int = 300) -> Tupl
         build_status, build_log, failure_stage = run_meson_build(repo_dir, timeout_s)
     elif build_type == "CMAKE":
         build_status, build_log, failure_stage = run_cmake_build(repo_dir, timeout_s)
+    elif build_type == "AUTOTOOLS":
+        build_status, build_log, failure_stage = run_autotools_build(repo_dir, timeout_s)
+    elif build_type == "PERL":
+        build_status, build_log, failure_stage = run_perl_build(repo_dir, timeout_s)
     else:
         return "FAIL", f"不支持的构建类型: {build_type}", "未知", "UNKNOWN"
 
@@ -119,4 +123,75 @@ def run_cmake_build(repo_dir: Path, timeout_s: int) -> Tuple[str, str, str]:
 
     return "OK", out, "NONE"  # 成功时返回“没有失败”
 
+def run_autotools_build(repo_dir: Path, timeout_s: int) -> Tuple[str, str, str]:
+    """
+    使用 Autotools (GNU configure) 构建项目，并记录失败阶段
+    :param repo_dir: 仓库路径
+    :param timeout_s: 超时设置
+    :return: 构建状态、构建日志、失败阶段
+    """
+    # 如果 configure 不存在但 autogen.sh 存在，先运行 autogen.sh
+    if not (repo_dir / "configure").exists() and (repo_dir / "autogen.sh").exists():
+        autogen_cmd = ["bash", "autogen.sh"]
+        code, out = run_cmd(autogen_cmd, cwd=repo_dir, timeout_s=timeout_s)
+        if code != 0:
+            return "FAIL", out, "CONFIGURATION"
+    
+    # 运行 configure
+    if (repo_dir / "configure").exists():
+        configure_cmd = ["bash", "./configure"]
+        code, out = run_cmd(configure_cmd, cwd=repo_dir, timeout_s=timeout_s)
+        if code != 0:
+            return "FAIL", out, "CONFIGURATION"
+    else:
+        return "FAIL", "configure 脚本不存在", "CONFIGURATION"
+    
+    # 执行构建
+    build_cmd = ["make", "-j", str(min(4, os.cpu_count() or 1))]
+    code, out = run_cmd(build_cmd, cwd=repo_dir, timeout_s=timeout_s)
+    if code != 0:
+        return "FAIL", out, "BUILD"
+    
+    # 执行测试（优先 make test，其次 make check）
+    test_cmd = ["make", "test"]
+    code, out = run_cmd(test_cmd, cwd=repo_dir, timeout_s=timeout_s)
+    if code != 0:
+        # 尝试 make check
+        test_cmd = ["make", "check"]
+        code, out = run_cmd(test_cmd, cwd=repo_dir, timeout_s=timeout_s)
+        if code != 0:
+            return "FAIL", out, "TESTING"
+    
+    return "OK", out, "NONE"
+
+
+def run_perl_build(repo_dir: Path, timeout_s: int) -> Tuple[str, str, str]:
+    """
+    使用 Perl 构建项目 (Makefile.PL)，并记录失败阶段
+    :param repo_dir: 仓库路径
+    :param timeout_s: 超时设置
+    :return: 构建状态、构建日志、失败阶段
+    """
+    # 运行 perl Makefile.PL 生成 Makefile
+    if (repo_dir / "Makefile.PL").exists():
+        perl_cmd = ["perl", "Makefile.PL"]
+        code, out = run_cmd(perl_cmd, cwd=repo_dir, timeout_s=timeout_s)
+        if code != 0:
+            return "FAIL", out, "CONFIGURATION"
+    else:
+        return "FAIL", "Makefile.PL 不存在", "CONFIGURATION"
+    
+    # 执行构建
+    build_cmd = ["make", "-j", str(min(4, os.cpu_count() or 1))]
+    code, out = run_cmd(build_cmd, cwd=repo_dir, timeout_s=timeout_s)
+    if code != 0:
+        return "FAIL", out, "BUILD"
+    
+    # 执行测试
+    test_cmd = ["make", "test"]
+    code, out = run_cmd(test_cmd, cwd=repo_dir, timeout_s=timeout_s)
+    if code != 0:
+        return "FAIL", out, "TESTING"
+    
+    return "OK", out, "NONE"
 
