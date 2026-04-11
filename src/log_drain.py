@@ -183,13 +183,12 @@ class LogExtractor:
         return "未知"
 
 
-def extract_key_log_snippet(full_log: str, max_length: int = 1000) -> Tuple[str, str]:
-    """
-    便捷函数：从完整日志中提取关键片段并加入总长度限制
-    :param full_log: 完整日志
-    :param max_length: 最大生成长度
-    :return: (失败原因, 关键日志片段字符串)
-    """
+def extract_key_log_snippet(
+    full_log: str,
+    failure_stage: str = "UNKNOWN",
+    max_length: int = 1000,
+) -> Tuple[str, str]:
+
     error_type, snippets = LogExtractor.extract_key_logs(full_log, max_snippets=5)
     failure_reason = LogExtractor.classify_failure_reason(full_log, error_type)
     

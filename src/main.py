@@ -1,106 +1,99 @@
 from __future__ import annotations
+
 import argparse
-import json
-from datetime import datetime, timezone
 from pathlib import Path
 
 from io_csv import read_repo_urls
-from git_ops import controlled_clone
-from detect import detect_build_type
-from build import build_project
-from output_generator import generate_output_files
+from git_ops import controlled_clone, safe_repo_dir_name
+from pipeline import run_package_pipeline
+from output_generator import (
+    SUPPORTED_BUILD_TYPES,
+    make_clone_fail_row,
+    make_supported_fail_row,
+    make_supported_success_row,
+    make_unsupported_row,
+    print_summary,
+    write_rows_to_csv,
+)
 
 
-def parse_args():
-    p = argparse.ArgumentParser(description="Week1: CSV -> controlled clone -> build type detect")
-    p.add_argument("--csv", required=True, help="CSV path with column repo_url")
-    p.add_argument("--workspace", default="workspace", help="Workspace dir for cloned repos")
-    p.add_argument("--out", default="results/week1_results.jsonl", help="Output JSONL path")
-    p.add_argument("--clone-timeout", type=int, default=300, help="Clone timeout in seconds")
-    return p.parse_args()
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--csv", required=True, help="输入CSV文件路径")
+    parser.add_argument("--workspace", required=True, help="仓库克隆工作目录")
+    parser.add_argument("--output-dir", required=True, help="输出结果目录")
+    parser.add_argument("--timeout", type=int, default=600, help="单个软件包超时时间（秒）")
+    args = parser.parse_args()
 
-def get_repo_name(url: str) -> str:
-    """
-    从 GitHub 仓库 URL 中提取仓库名
-    例如： 'https://github.com/user/repo.git' -> 'repo'
-    """
-    # 去掉 '.git' 后缀，获取仓库名
-    return url.rstrip('/').split('/')[-1].replace('.git', '')
-
-def main():
-    args = parse_args()
-    print(f"命令行参数：{args}")
     csv_path = Path(args.csv)
     workspace_dir = Path(args.workspace)
-    out_path = Path(args.out)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    output_dir = Path(args.output_dir)
+
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     repo_urls = read_repo_urls(csv_path)
-    print(f"Found {len(repo_urls)} repositories to process.")  # 输出找到的仓库数
 
-    with out_path.open("a", encoding="utf-8") as f:
-        # 初始化序号
-        index = 1
+    unsupported_rows: list[dict] = []
+    success_rows: list[dict] = []
+    fail_rows: list[dict] = []
 
-        for url in repo_urls:
-            print(f"Processing repository: {url}")  # 输出当前正在处理的仓库
-            # 提取仓库名
-            repo_name = get_repo_name(url)
+    total = len(repo_urls)
 
-            # 执行 Git clone
-            ok, repo_path, clone_log = controlled_clone(url, workspace_dir, timeout_s=args.clone_timeout)
+    for idx, repo_url in enumerate(repo_urls, start=1):
+        package_name = safe_repo_dir_name(repo_url)
 
-            # 生成记录内容
-            record = {
-                "index": index,  # 添加序号
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "repo_url": url,
-                "repo_name": repo_name,  # 添加仓库名
-                "clone_status": "OK" if ok else "FAIL",
-                "clone_log": clone_log[:2000],
-                "build_type": "OTHER",
-                "build_status": "PENDING",  # 初始状态
-                "build_log": "",
-                "failure_reason": "未运行",  # 新增：失败原因
-                "failure_stage": "NONE",  # 新增：记录失败阶段
-                "evidence": [],
-            }
+        print(f"[{idx}/{total}] 开始处理: {package_name}")
 
-            # 如果 clone 成功，执行构建
-            if ok and repo_path:
-                build_type, evidence = detect_build_type(repo_path)
-                record["build_type"] = build_type
-                record["evidence"] = evidence
+        ok, repo_path, clone_log = controlled_clone(
+            repo_url=repo_url,
+            workspace_dir=workspace_dir,
+            timeout_s=args.timeout,
+        )
 
-                build_status, build_log, failure_reason, failure_stage = build_project(repo_path, build_type, timeout_s=args.clone_timeout)
-                record["build_status"] = build_status
-                record["build_log"] = build_log
-                record["failure_reason"] = failure_reason  # 新增：记录失败原因
-                record["failure_stage"] = failure_stage  # 新增：记录失败的阶段
+        if not ok or repo_path is None:
+            print(f"[{idx}/{total}] clone失败: {package_name}")
+            fail_rows.append(make_clone_fail_row(package_name, repo_url, clone_log))
+            continue
 
-            # 将序号和仓库信息写入文件
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
-            print(f"{index}. {repo_name} -> clone={record['clone_status']} build={record['build_status']} stage={record['failure_stage']}")
+        try:
+            plan, result = run_package_pipeline(repo_path, timeout_s=args.timeout)
 
-            # 增加序号
-            index += 1
+            # 四个构建测试类型以外，单独输出
+            if plan.detected_type not in SUPPORTED_BUILD_TYPES:
+                unsupported_rows.append(make_unsupported_row(package_name, repo_url, plan))
+                print(f"[{idx}/{total}] 非四类类型，已归入 unsupported: {package_name} | 类型={plan.detected_type}")
+                continue
 
-    print(f"Done. Results: {out_path}")
-    
-    # 生成最终输出 CSV 文件
-    print("\n" + "="*80)
-    print("生成最终输出文件...")
-    print("="*80)
-    
-    success_csv_path = out_path.parent / "success.csv"
-    failure_csv_path = out_path.parent / "failure.csv"
-    
-    output_stats = generate_output_files(out_path, success_csv_path, failure_csv_path)
-    
-    print(f"\n✅ success.csv 已生成: {success_csv_path}")
-    print(f"❌ failure.csv 已生成: {failure_csv_path}")
-    print(f"\n统计: 成功 {output_stats['success_count']} | 失败 {output_stats['failure_count']}")
+            # 四个构建测试类型以内：按成功/失败分开
+            if result.status == "OK":
+                success_rows.append(make_supported_success_row(package_name, repo_url, plan))
+                print(f"[{idx}/{total}] 成功: {package_name} | 类型={plan.detected_type}")
+            else:
+                fail_rows.append(make_supported_fail_row(package_name, repo_url, plan, result))
+                print(
+                    f"[{idx}/{total}] 失败: {package_name} | "
+                    f"类型={plan.detected_type} | 阶段={result.failure_stage} | 原因={result.failure_reason}"
+                )
+
+        except Exception as e:
+            print(f"[{idx}/{total}] pipeline异常: {package_name} -> {e}")
+            fail_rows.append(make_clone_fail_row(package_name, repo_url, f"pipeline异常: {e}"))
+
+    unsupported_csv = output_dir / "unsupported_results.csv"
+    success_csv = output_dir / "success_results.csv"
+    fail_csv = output_dir / "fail_results.csv"
+
+    write_rows_to_csv(unsupported_rows, unsupported_csv)
+    write_rows_to_csv(success_rows, success_csv)
+    write_rows_to_csv(fail_rows, fail_csv)
+
+    print_summary(unsupported_rows, success_rows, fail_rows)
+
+    print(f"非四类输出: {unsupported_csv}")
+    print(f"成功输出: {success_csv}")
+    print(f"失败输出: {fail_csv}")
+
 
 if __name__ == "__main__":
     main()
-
